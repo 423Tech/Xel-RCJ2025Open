@@ -483,7 +483,7 @@ def Pos2Angle(lInputPos:list[int,int],lAimPos:list[int,int]) -> int:
     iDeltaAngle = math.degrees(math.atan2(iDeltaY,iDeltaX))
     return int(iDeltaAngle)
 
-def Pos2Pos(lAimPos:list[int,int,int], A2O:bool | None = False, Speed:int | None = None) -> int:
+def Pos2Pos(lAimPos:list[int,int,int], A2O:bool | None = False, SpeedRatio:int | None = None,Speed:int | None = None) -> int:
     '''
     iFacingAngle 移动时面对的方向 0~360
     lAimPos 目标坐标位置 如[0,0] 距离越近速度越小
@@ -503,17 +503,7 @@ def Pos2Pos(lAimPos:list[int,int,int], A2O:bool | None = False, Speed:int | None
     iDeltaY = (iAimY) - (iLocY)
     RestrictedX = cfg.read("Border","1")[0]
     RestrictedY = cfg.read("Border","1")[1]
-    try:
-        try:
-            Slope = iDeltaX/iDeltaY
-        except ZeroDivisionError:
-            Slope = 1
-        if Slope*RestrictedY > RestrictedX:
-            iAimX = (RestrictedX - 3)*kX
-        if Slope/RestrictedX > RestrictedY:
-            iAimY = (RestrictedY - 3)*kY
-    except:
-        iAimX,iAimY,iAimZ = lAimPos
+    iAimX,iAimY,iAimZ = lAimPos
     logger.info([iAimX,iAimY,iAimZ])
     if iLocZ > 180:
         iDeltaZ = 360 - abs(iAimZ) - abs(iLocZ)
@@ -524,6 +514,38 @@ def Pos2Pos(lAimPos:list[int,int,int], A2O:bool | None = False, Speed:int | None
     LinearMap(iDeltaY,[0,300],[150,230])
     iErrorRange = cfg.read("Position","ErrorRange")/4
     iMovedAngle = int(math.degrees(math.atan2(iDeltaY,iDeltaX)))
+    if oldVersion:
+        try:
+            try:
+                Slope = iDeltaX/iDeltaY
+            except ZeroDivisionError:
+                Slope = 1
+            if Slope*RestrictedY > RestrictedX:
+                iAimX = (RestrictedX - 3)*kX
+            if Slope/RestrictedX > RestrictedY:
+                iAimY = (RestrictedY - 3)*kY
+        except:
+            iAimX,iAimY,iAimZ = lAimPos
+        logger.info([iAimX,iAimY,iAimZ])
+        if iLocZ > 180:
+            iDeltaZ = 360 - abs(iAimZ) - abs(iLocZ)
+        else:
+            iDeltaZ = (abs(iAimZ) - abs(iLocZ))
+    else:
+        try:
+            availableAngles = []
+            for k in range(1,2,1):
+                for a in range(0,180,1):
+                    RstrictedSlope = math.tan(math.radians(90-a))*k
+                    if RstrictedSlope*RestrictedY > RestrictedX:
+                        iFixedX = (RestrictedX - 3)*kX
+                    if RstrictedSlope/RestrictedX > RestrictedY:
+                        iFixedY = (RestrictedY - 3)*kY
+                    if math.sqrt(iFixedX**2+iFixedY**2) <= 20:
+                        availableAngles.append(a*k) 
+            iMovedAngle = FindNearstAngle(iMovedAngle,availableAngles)
+        except:
+            pass
     if A2O:
         DistanceCache = GetDistance()
         if 0 < iMovedAngle%90 <= 1 :
@@ -555,8 +577,10 @@ def Pos2Pos(lAimPos:list[int,int,int], A2O:bool | None = False, Speed:int | None
     elif iErrorRange > abs(iDeltaX) and iErrorRange > abs(iDeltaY) and not abs(iErrorRange) > abs(iDeltaZ):
         chassis.GoZSpeed(iDeltaZ)
     else:
+        if SpeedRatio:
+            chassis.GoA(lAimPos[2],90-iMovedAngle,SpeedRatio/100)
         if Speed:
-            chassis.GoA(lAimPos[2],90-iMovedAngle,Speed)
+            chassis.GoA(lAimPos[2],90-iMovedAngle,SpeedRatio/100)
         else:
             chassis.GoA(lAimPos[2],90-iMovedAngle,int((abs(iDeltaX)+abs(iDeltaY))*1.5))
         return False
